@@ -10,6 +10,7 @@
 import requests,re
 from scrapy.selector import Selector
 from time import time,sleep
+import datetime
 import threading
 
 #官方大红帖：http://bbs.uestc.edu.cn/forum.php?mod=viewthread&tid=1655504
@@ -100,11 +101,11 @@ class StuhomeSpider():
         '''定时刷新主页，保持登录状态，刷在线时长，美滋滋'''
         while True:
             self.session.get(self.home_url, headers=self.headers)
-            print('刷新主页成功，离升级又近了一步，嘿嘿')
+            print(datetime.datetime.now(),':刷新主页成功，离升级又近了一步，嘿嘿')
             # 水大红贴，慎重打开，容易被封
             # self.get_tiezi_params_and_reply()
             # print('大红贴水贴成功，嘿嘿')
-            sleep(70)
+            sleep(10)
 
 
     def run(self):
