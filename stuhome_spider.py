@@ -109,14 +109,14 @@ class StuhomeSpider():
 
 
     def run(self):
-        self.username = input('请输入用户名：')
-        self.password = input('请输入密码：')
+        self.username = input("请输入用户名：")
+        self.password = input("请输入密码：")
         login_result = self.log_in()
         if login_result:
-            willing2reply = input('登录成功！是否要水贴？ y/n:')
+            willing2reply = input("登录成功！是否要水贴？ y/n:")
             if willing2reply=='y':
-                self.tiezi_url = input('请输入要回复的帖子url：')
-                self.reply_message = input('请输入要回复的内容：')
+                self.tiezi_url = input("请输入要回复的帖子url：")
+                self.reply_message = input("请输入要回复的内容：")
                 self.get_tiezi_params_and_reply()
             else:
                 print('开始刷新主页')
