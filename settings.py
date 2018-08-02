@@ -10,4 +10,8 @@
 # 刷新页面的延迟，单位s
 REFRESH_DELAY = 10
 
-
+#代理ip
+PROXIES = {
+    'http': '',
+    'https': ''
+}

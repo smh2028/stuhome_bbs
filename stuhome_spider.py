@@ -12,9 +12,13 @@ from scrapy.selector import Selector
 from time import time,sleep
 import datetime
 import threading,logging
-from settings import REFRESH_DELAY
+from settings import REFRESH_DELAY,PROXIES
 
 #官方大红帖：http://bbs.uestc.edu.cn/forum.php?mod=viewthread&tid=1655504
+
+LOG_SUCC = 1
+LOG_FAILED = 2
+LOG_NEEDPROXIES = 3
 
 class StuhomeSpider():
     username = ''
@@ -63,14 +67,15 @@ class StuhomeSpider():
         #     'https':'82.202.70.132:8080'
         # }
         response = self.session.post(self.log_in_url.format(self.loginhash),headers=self.headers,data=post_data
-                                     )#,proxies=proxies
+                                     ,proxies=PROXIES)
         #打印登录结果
-        print(response.text)
+        # print(response.text)
         if 'succeedmessage' in response.text:
-            return True
-        # elif '请输入验证码后继续登录' in response.text:
-        #     self.crack_captcha(response.text)
-        return False
+            return LOG_SUCC
+        elif '请输入验证码后继续登录' in response.text:
+            # self.crack_captcha(response.text)
+            return LOG_NEEDPROXIES
+        return LOG_FAILED
 
     def crack_captcha(self,text):
         '''破解验证码'''
@@ -121,10 +126,12 @@ class StuhomeSpider():
         self.username = input("请输入用户名：")
         self.password = input("请输入密码：")
         login_result = self.log_in()
-        if login_result:
+        if login_result == LOG_SUCC:
             self.logger.warning('登录成功，现在开始刷新')
             refresh_thread = threading.Thread(target=self.refresh)
             refresh_thread.start()
+        elif login_result == LOG_NEEDPROXIES:
+            self.logger.warning('失败次数太多，请设置代理')
         else:
             self.logger.warning('用户名或密码错误，登录失败，请重试！')
             self.run()
