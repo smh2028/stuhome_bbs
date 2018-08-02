@@ -1,12 +1,20 @@
-# stuhome_bbs
-清水河畔脚本，刷在线时长，自动水贴回帖
+# 清水河畔脚本，刷在线时长，自动水贴回帖
+## 安装依赖：
 
-使用：
+requests==2.18.4
 
-1.python stuhome_spider.py
+Scrapy==1.5.0
 
-2.按提示输入用户名和密码
+## 使用
 
-3.输入要回复的贴子url和输入要回复的内容
+`python stuhome_spider.py`
 
-4.自动刷新主页，默认70s一次
+输入username
+
+输入psswpord
+
+如果登录成功会直接进入刷新页面，开始刷新河畔的主页，保持登录状态。登录失败则会返回至重新登录
+
+## 刷新频率
+
+10s刷新一次，修改settings.py的REFRESH_DELAY可以更改刷新频率

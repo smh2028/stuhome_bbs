@@ -11,7 +11,8 @@ import requests,re
 from scrapy.selector import Selector
 from time import time,sleep
 import datetime
-import threading
+import threading,logging
+from settings import REFRESH_DELAY
 
 #官方大红帖：http://bbs.uestc.edu.cn/forum.php?mod=viewthread&tid=1655504
 
@@ -40,6 +41,7 @@ class StuhomeSpider():
         #获得登录post请求的loginhash和formhash
         self.loginhash = re.search('username_(.*)',input_id).group(1)
         self.formhash = input_formhash
+        self.logger = logging.getLogger('Stuhome')
         # print(self.formhash)
 
 
@@ -63,10 +65,17 @@ class StuhomeSpider():
         response = self.session.post(self.log_in_url.format(self.loginhash),headers=self.headers,data=post_data
                                      )#,proxies=proxies
         #打印登录结果
-        # print(response.text)
+        print(response.text)
         if 'succeedmessage' in response.text:
             return True
+        # elif '请输入验证码后继续登录' in response.text:
+        #     self.crack_captcha(response.text)
         return False
+
+    def crack_captcha(self,text):
+        '''破解验证码'''
+        pass
+
 
     def get_tiezi_params_and_reply(self):
         '''根据帖子的url获取参数并发表回复'''
@@ -105,13 +114,21 @@ class StuhomeSpider():
             # 水大红贴，慎重打开，容易被封
             # self.get_tiezi_params_and_reply()
             # print('大红贴水贴成功，嘿嘿')
-            sleep(10)
+            sleep(REFRESH_DELAY)
 
 
     def run(self):
         self.username = input("请输入用户名：")
         self.password = input("请输入密码：")
         login_result = self.log_in()
+        if login_result:
+            self.logger.warning('登录成功，现在开始刷新')
+            refresh_thread = threading.Thread(target=self.refresh)
+            refresh_thread.start()
+        else:
+            self.logger.warning('用户名或密码错误，登录失败，请重试！')
+            self.run()
+
         # if login_result:
         #     willing2reply = input("登录成功！是否要水贴？ y/n:")
         #     if willing2reply=='y':
@@ -120,8 +137,7 @@ class StuhomeSpider():
         #         self.get_tiezi_params_and_reply()
         #     else:
         #         print('开始刷新主页')
-        refresh_thread = threading.Thread(target=self.refresh)
-        refresh_thread.start()
+
 
 
 if __name__ == '__main__':
