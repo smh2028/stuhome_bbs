@@ -26,7 +26,7 @@ Scrapy==1.5.0
 
 ## 代理
 
-如果短时间内失败次数过多，日主输出提示添加代理，则修改settings.py的PROXIES，添加你的代理，重新运行程序。
+如果短时间内失败次数过多，日志输出提示添加代理，则修改settings.py的PROXIES，添加你的代理，重新运行程序。
 
 ```python
 PROXIES = {
