@@ -12,7 +12,9 @@ from scrapy.selector import Selector
 from time import time,sleep
 import datetime
 import threading,logging
-from settings import REFRESH_DELAY,PROXIES
+from random import choice
+from settings import REFRESH_DELAY, PROXIES, REPLYS, CURRENT_USERNAME
+from urllib.parse import urlencode,urljoin
 
 #官方大红帖：http://bbs.uestc.edu.cn/forum.php?mod=viewthread&tid=1655504
 
@@ -26,10 +28,11 @@ class StuhomeSpider():
     log_page_url = 'http://bbs.uestc.edu.cn/member.php?mod=logging&action=login'
     log_in_url = 'http://bbs.uestc.edu.cn/member.php?mod=logging&action=login&loginsubmit=yes&loginhash={}&inajax=1'
     home_url = 'http://bbs.uestc.edu.cn/'
-    tiezi_url = 'http://bbs.uestc.edu.cn/forum.php?mod=viewthread&tid=1727470&extra=page%3D1'
+    tiezi_url = 'http://bbs.uestc.edu.cn/forum.php?mod=viewthread&tid=1655504'
+    dahong_url = 'http://bbs.uestc.edu.cn/forum.php?mod=viewthread&tid=1655504'
     reply_url = 'http://bbs.uestc.edu.cn/forum.php?mod=post&action=reply&fid={0}&tid={1}&extra={2}&replysubmit=yes' \
                 '&infloat=yes&handlekey=fastpost&inajax=1'
-    reply_message = 'test data from pp'
+    # reply_message = 'test data from pp'
     session = requests.session()
     headers = {
         'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -61,11 +64,6 @@ class StuhomeSpider():
             "answer": "",
         }
         self.session.headers.update(self.headers)
-        #代理测试
-        # proxies = {
-        #     'http':'82.202.70.132:8080',
-        #     'https':'82.202.70.132:8080'
-        # }
         response = self.session.post(self.log_in_url.format(self.loginhash),headers=self.headers,data=post_data
                                      ,proxies=PROXIES)
         #打印登录结果
@@ -81,12 +79,34 @@ class StuhomeSpider():
         '''破解验证码'''
         pass
 
+    def check(self):
+        """判断大红贴最后一个回复的人是不是我自己"""
+        params = {
+            'mod': 'viewthread',
+            'tid': '1655504',
+            'extra': '',
+            'page': self.page_num
+        }
+        base_url = 'http://bbs.uestc.edu.cn/forum.php?'
+        url = urljoin(base_url, urlencode(params))
+        response = self.session.get(url, headers=self.headers)
+        sel = Selector(text=response.text)
+        last = sel.xpath('//div[@id="postlist"]//div[@class="authi"]/a/text()').extract()[-2]
+        print('lastname',last)
+        if last == CURRENT_USERNAME:
+            return True
+        return False
+
 
     def get_tiezi_params_and_reply(self):
         '''根据帖子的url获取参数并发表回复'''
         response = self.session.get(self.tiezi_url,headers=self.headers)
         # print(response.text)
+
         sel = Selector(text=response.text)
+        self.page_num = re.search('(\d*) 页',response.text,re.M).group(1)
+        print('总页数',self.page_num)
+
         fid = sel.xpath('//a[@href="curforum"]/@fid').extract_first()
         tid = re.search('tid=(\d+)',self.tiezi_url).group(1)
         if 'extra' in self.tiezi_url:
@@ -94,12 +114,16 @@ class StuhomeSpider():
         else:
             extra = ''
         formhash = sel.xpath('//input[@name="formhash"]/@value').extract_first()
-        self.reply(fid,tid,extra,formhash)
+
+        self.logger.warning('checking')
+        # 如果最后一个回复的人不是我才回复
+        if not self.check():
+            self.reply(fid,tid,extra,formhash)
 
     def reply(self,fid,tid,extra,formhash):
         '''回复某一个帖子'''
         post_data = {
-            'message': self.reply_message,
+            'message': choice(REPLYS),
             'posttime': str(int(time())),
             'formhash': formhash,
             'usesig': '1',
@@ -114,11 +138,11 @@ class StuhomeSpider():
     def refresh(self):
         '''定时刷新主页，保持登录状态，刷在线时长，美滋滋'''
         while True:
+            # 刷新河畔主页
             self.session.get(self.home_url, headers=self.headers)
             print(datetime.datetime.now(),':刷新主页成功，离升级又近了一步，嘿嘿')
-            # 水大红贴，慎重打开，容易被封
-            # self.get_tiezi_params_and_reply()
-            # print('大红贴水贴成功，嘿嘿')
+            # 水大红贴
+            self.get_tiezi_params_and_reply()
             sleep(REFRESH_DELAY)
 
 
@@ -127,6 +151,7 @@ class StuhomeSpider():
         self.password = input("请输入密码：")
         login_result = self.log_in()
         if login_result == LOG_SUCC:
+
             self.logger.warning('登录成功，现在开始刷新')
             refresh_thread = threading.Thread(target=self.refresh)
             refresh_thread.start()
@@ -135,17 +160,6 @@ class StuhomeSpider():
         else:
             self.logger.warning('用户名或密码错误，登录失败，请重试！')
             self.run()
-
-        # if login_result:
-        #     willing2reply = input("登录成功！是否要水贴？ y/n:")
-        #     if willing2reply=='y':
-        #         self.tiezi_url = input("请输入要回复的帖子url：")
-        #         self.reply_message = input("请输入要回复的内容：")
-        #         self.get_tiezi_params_and_reply()
-        #     else:
-        #         print('开始刷新主页')
-
-
 
 if __name__ == '__main__':
     stuhome_sp = StuhomeSpider()
