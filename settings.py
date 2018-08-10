@@ -7,6 +7,23 @@
 @desc    :
 '''
 
+# 最大线程数
+CONCURRENT_THREADS = 20
+
+# 登录用户名
+LOGIN_USERNAME = ''
+# 登录密码
+LOGIN_PASSWORD = ''
+
+# 起始用户uid
+START_UID = ''
+
+# Mongodb配置
+MONGODB_URI = 'localhost'
+MONGODB_DB = 'stuhome'
+MONGODB_PORT = 27017
+MONGODB_COLLECTION = 'users'
+
 # 刷新页面的延迟，单位s
 REFRESH_DELAY = 60
 
