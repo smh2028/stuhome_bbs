@@ -21,25 +21,16 @@ import pymongo,time
 from queue import Queue,Empty
 from threading import Thread,Lock
 import logging,json
+from ydm_api import ydm_func
+from fake_useragent import UserAgent
 
-#官方大红帖：http://bbs.uestc.edu.cn/forum.php?mod=viewthread&tid=1655504
+# 爬虫可能会遇到很多用户的好友都相同，导致队列中无元素可以获取，所有进程都被迫停止
+# 解决办法：1.开始时往队列里多添加几个好友数多的活跃用户
+#          2.更改获取好友策略，从水区帖子内容获得用户uid,难度高，上scrapy
 
 LOG_SUCC = 1 # 登录成功状态
 LOG_FAILED = 2 # 登录失败状态，用户名或者密码错误
 LOG_NEEDPROXIES = 3 # 登录失败过多，需要等待15min或者设置代理，实测只要10min不到
-
-class OrderedQueue(Queue):
-
-    def _init(self, maxsize):
-        self.queue = set()
-
-    def _put(self, item):
-        self.queue.add(item)
-
-    # Get an item from the queue
-    def _get(self):
-        return self.queue.pop()
-
 
 class StuhomeSpider():
     """河畔用户信息爬虫"""
@@ -55,7 +46,7 @@ class StuhomeSpider():
     friend_url = 'http://bbs.uestc.edu.cn/home.php?mod=space&uid={}&do=friend&from=space&page={}'
 
     def __init__(self):
-        '''获得fromhash和loginhash'''
+        """获得fromhash和loginhash以及其他初始化"""
         self.session = requests.session()
         adapter = requests.adapters.HTTPAdapter(pool_connections=100, pool_maxsize=100)
         self.session.mount('http://', adapter)
@@ -64,6 +55,7 @@ class StuhomeSpider():
                           'Chrome/67.0.3396.99 Safari/537.36',
         }
         self.session.headers.update(headers)
+        self.ua = UserAgent()
         # 获得登录post请求的loginhash和formhash
         response = self.session.get(self.log_page_url, proxies=PROXIES)
         sel = Selector(text=response.text)
@@ -75,15 +67,21 @@ class StuhomeSpider():
         # 获得Mongodb的collection对象
         self.co = pymongo.MongoClient(MONGODB_URI, MONGODB_PORT)[MONGODB_DB][MONGODB_COLLECTION]
         self.queue = Queue()
+        self.page_queue = Queue()
+        self.url_queue = Queue()
+        self.uid_queue = Queue()
         self.filter = set()
         self.locker = Lock()
         self.queue.put(START_UID)
         # 避免重复爬取第一个用户
         self.filter.add(START_UID)
         logging.basicConfig(filename='bbs.log', filemode="w", level=logging.DEBUG)
+        for i in range(1,5087):
+            url = 'http://bbs.uestc.edu.cn/forum.php?mod=forumdisplay&fid=25&page={}'.format(i)
+            self.page_queue.put(url)
 
     def log_in(self):
-        '''登录'''
+        """登录"""
         post_data = {
             "formhash": self.formhash,
             "referer": "http://bbs.uestc.edu.cn/",
@@ -101,11 +99,11 @@ class StuhomeSpider():
         elif '请输入验证码后继续登录' in response.text:
             result = self.crack_captcha(response.text)
             if result:
-                return LOG_NEEDPROXIES
+                return LOG_SUCC
         return LOG_FAILED
 
     def crack_captcha(self,text):
-        '''破解验证码'''
+        """破解验证码"""
         print('验证码出现')
         auth_url = re.search("location.href='(.*)'</script>", text).group(1)
         print('auth_url:', auth_url)
@@ -139,7 +137,10 @@ class StuhomeSpider():
             # print(response2.text)
             with open('captcha.png','wb') as f:
                 f.write(response2.content)
-            qr = input('请输入验证码：')
+
+            # 手工输入验证码或者接入打码平台
+            # qr = input('请输入验证码：')
+            qr = ydm_func(YDM_APPID, YDM_APPKEY, YDM_USERNAME, YDM_PASSWORD, b'captcha.png',1004)
             auth = re.search('auth=(.*?)&',auth_url).group(1)
             seccodehash = captcha_url.split('=')[-1]
             post_data = {
@@ -169,7 +170,7 @@ class StuhomeSpider():
 
             #5.打印登录结果,判断是否登录成功
             print('打印输入验证码之后的登录结果')
-            print(response.text)
+            # print(response.text)
             if 'succeedmessage' in response.text:
                 return True
             return False
@@ -196,14 +197,11 @@ class StuhomeSpider():
 
 
     def get_tiezi_params_and_reply(self):
-        '''根据帖子的url获取参数并发表回复'''
+        """根据帖子的url获取参数并发表回复"""
         response = self.session.get(self.tiezi_url)
-        # print(response.text)
-
         sel = Selector(text=response.text)
         self.page_num = re.search('(\d*) 页',response.text,re.M).group(1)
         print('总页数',self.page_num)
-
         fid = sel.xpath('//a[@href="curforum"]/@fid').extract_first()
         tid = re.search('tid=(\d+)',self.tiezi_url).group(1)
         if 'extra' in self.tiezi_url:
@@ -211,14 +209,13 @@ class StuhomeSpider():
         else:
             extra = ''
         formhash = sel.xpath('//input[@name="formhash"]/@value').extract_first()
-
         self.logger.warning('checking')
         # 如果最后一个回复的人不是我才回复
         if not self.check():
             self.reply(fid,tid,extra,formhash)
 
     def reply(self,fid,tid,extra,formhash):
-        '''回复某一个帖子'''
+        """回复某一个帖子"""
         post_data = {
             'message': choice(REPLYS),
             'posttime': str(int(time())),
@@ -233,7 +230,7 @@ class StuhomeSpider():
             print('回复失败！')
 
     def refresh(self):
-        '''定时刷新主页，保持登录状态，刷在线时长'''
+        """定时刷新主页，保持登录状态，刷在线时长"""
         while True:
             # 刷新河畔主页
             try:
@@ -245,6 +242,65 @@ class StuhomeSpider():
             # self.get_tiezi_params_and_reply()
             sleep(REFRESH_DELAY)
 
+    def update_useragent(self):
+        """随机更换User-Agent"""
+        headers = {
+            'User-Agent': self.ua.random
+        }
+        self.session.headers.update(headers)
+
+    def crawl_posts_page(self,i):
+        """
+        爬取水区第多少页，从page_quque中取出水手之家的每页的url,生产出每页的帖子url，放入url_queue
+        :param i: 线程编号
+        :return: 帖子url列表
+        """
+        while True:
+            try:
+                url = self.page_queue.get(timeout=10)
+            except Empty as e:
+                logging.warning('线程{} 退出 {}'.format(i, time.ctime()))
+                break
+            self.update_useragent()
+            resp = self.session.get(url)
+            if resp.status_code == 200:
+                sel = Selector(text=resp.text)
+                post_urls = sel.xpath('//div[@id="threadlist"]/div[@class="bm_c"]/form/table/tbody[contains(@id,'
+                                      '"normalthread")]/tr/th/a[@class="s xst"]/@href').extract()
+                # print(post_urls)
+                for post_url in post_urls:
+                    self.url_queue.put(post_url)
+
+    def crawl_posts_url(selfi):
+        """爬取帖子，获得该帖子内的所有uid,放入uid_queue"""
+        while True:
+            try:
+                url = self.url_queue.get(timeout=10)
+            except Empty as e:
+                logging.warning('线程{} 退出 {}'.format(i, time.ctime()))
+                break
+            self.update_useragent()
+            resp = self.session.get(url)
+            if resp.status_code == 200:
+                sel = Selector(text=resp.text)
+                page_result = re.search('/ (\d*) 页', response.text, re.M)
+                # 该贴不止1页
+                if page_result:
+                    page_num = page_result.group(1)
+                # 该贴只有1页
+                else:
+                    page_num = 1
+                for page in range(1,page_num+1):
+                    url2 = url + '&page={}'.format(page)
+                    resp2 = self.session.get(url2)
+                    if resp2.status_code == 200:
+                        sel2 = Selector(text=resp2.text)
+                        uids = sel.xpath('//div[@id="postlist"]//div[@class="authi"]/a/@href').extract()
+                        print('{}页uids:'.format(page),uids)
+                        for uid in uids:
+                            uid_real = uid.split('=')[-1]
+                            self.uid_queue.put(uid_real)
+
     def crawl(self,i):
         """爬取用户信息"""
         while True:
@@ -255,51 +311,65 @@ class StuhomeSpider():
                 break
             # 解析用户信息，写入Mongodb
             profile_url = 'http://bbs.uestc.edu.cn/home.php?mod=space&uid={}&do=profile'.format(uid)
+            self.update_useragent()
             profile_resp = self.session.get(profile_url)
             item = parse_user(profile_resp.text, uid)
             if item:
                 logging.warning('saving item {}'.format(json.dumps(item)))
                 self.co.insert_one(item)
+
             # 解析好友信息，获得所有好友的uid并加入queue
             frinds_url = self.friend_url.format(uid,1)
             friends_resp = self.session.get(frinds_url)
             sel = Selector(text=friends_resp.text)
             foot_node = sel.xpath('//div[@class="mtm pgs cl"]')
-            if foot_node: # 好友不止一页
-                pagenum = foot_node.xpath('./div/a[@class="last"]/text()').extract_first()
-                if pagenum:
-                    for page in pagenum:
-                        url = self.friend_url.format(uid,page)
-                        resp = self.session.get(url)
-                        sl = Selector(text=resp.text)
-                        hrefs = sl.xpath('//ul[@class="buddy cl"]/li/div[1]/a/@href').extract()
-                        for href in hrefs:
-                            uid2 = href.split('=')[-1]
-                            if uid2 not in self.filter:
-                                logging.warning('friend uid:{}'.format(uid2))
-                                self.queue.put(uid2)
-                                with self.locker:
-                                    self.filter.add(uid2)
+            # 好友不止一页
+            if foot_node:
+                pagenum = foot_node.xpath('./div/label/span/text()').extract_first()
+                pagenum = int(pagenum.split(' ')[2])
+                # print('pagenum',pagenum,type(pagenum))
+            else:
+                pagenum = 1
+            if pagenum:
+                for page in range(1,pagenum+1):
+                    url = self.friend_url.format(uid,page)
+                    self.update_useragent()
+                    resp = self.session.get(url)
+                    sl = Selector(text=resp.text)
+                    hrefs = sl.xpath('//ul[@class="buddy cl"]/li/div[1]/a/@href').extract()
+                    for href in hrefs:
+                        uid2 = href.split('=')[-1]
+                        if uid2 not in self.filter:
+                            logging.warning('friend uid:{}'.format(uid2))
+                            self.queue.put(uid2)
+                            with self.locker:
+                                self.filter.add(uid2)
+            # # 好友只有一页
+            # else:
+            #     hrefs = sel.xpath('//ul[@class="buddy cl"]/li/div[1]/a/@href').extract()
+            #     for href in hrefs:
+            #         uid3 = href.split('=')[-1]
+            #         if uid3 not in self.filter:
+            #             logging.warning('friend uid:{}'.format(uid3))
+            #             self.queue.put(uid3)
+            #             with self.locker:
+            #                 self.filter.add(uid3)
 
-            else: # 好友只有一页
-                hrefs = sel.xpath('//ul[@class="buddy cl"]/li/div[1]/a/@href').extract()
-                for href in hrefs:
-                    uid3 = href.split('=')[-1]
-                    if uid3 not in self.filter:
-                        logging.warning('friend uid:{}'.format(uid3))
-                        self.queue.put(uid3)
-                        with self.locker:
-                            self.filter.add(uid3)
+    def crawl_flow(self,i):
+        self.crawl_posts_page(i)
+        self.crawl_posts_url(i)
+        self.crawl(i)
 
     def run(self):
+        """启动函数"""
         self.username = LOGIN_USERNAME
         self.password = LOGIN_PASSWORD
         login_result = self.log_in()
         if login_result == LOG_SUCC:
             self.logger.warning('登录成功')
+            # 挂机刷新进程
             # refresh_thread = threading.Thread(target=self.refresh)
             # refresh_thread.start()
-
             # 多线程爬取用户信息
             threads = []
             for i in range(CONCURRENT_THREADS):

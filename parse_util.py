@@ -42,6 +42,6 @@ def parse_user(text,uid):
         score_info = profile.xpath('./div[@id="psts"]/ul/li/text()').extract()
         item['score'] = score_info[1]
         item['water_count'] = score_info[3]
-        fields = ['name', 'uid', 'signature', 'friends_count', 'reply_count', 'theme_count', 'share_count','group',
-                  'online_time', 'register_date', 'score', 'water_count']
+        # fields = ['name', 'uid', 'signature', 'friends_count', 'reply_count', 'theme_count', 'share_count','group',
+        #           'online_time', 'register_date', 'score', 'water_count']
         return item

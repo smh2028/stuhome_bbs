@@ -8,7 +8,7 @@
 '''
 
 # 最大线程数
-CONCURRENT_THREADS = 20
+CONCURRENT_THREADS = 40
 
 # 登录用户名
 LOGIN_USERNAME = ''
@@ -16,7 +16,16 @@ LOGIN_USERNAME = ''
 LOGIN_PASSWORD = ''
 
 # 起始用户uid
-START_UID = ''
+START_UID = '92739'
+
+# 云打码appid
+YDM_APPID = None
+# 云打码appkey
+YDM_APPKEY = None
+# 云打码用户名
+YDM_USERNAME = None
+# 云打码密码
+YDM_PASSWORD = None
 
 # Mongodb配置
 MONGODB_URI = 'localhost'
