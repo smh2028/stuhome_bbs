@@ -12,7 +12,6 @@ from scrapy.selector import Selector
 
 
 def parse_user(text,uid):
-    # print('in parse user:',uid)
     sel = Selector(text=text)
     profile = sel.xpath('//div[@class="bm_c u_profile"]')
     if profile.extract():
@@ -22,7 +21,6 @@ def parse_user(text,uid):
         item['uid'] = re.search('(\d+)', uid_full).group(1)
         item['signature'] = profile.xpath('./div[1]/ul/li/table//td/text()').extract_first()
         statistical_info = profile.xpath('./div[1]/ul[@class="cl bbda pbm mbm"]/li/a/text()').extract()# re('(\d+)')
-        # if statistical_info:
         item['friends_count'] = statistical_info[0]
         item['reply_count'] = statistical_info[3]
         item['theme_count'] = statistical_info[4]
