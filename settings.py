@@ -7,6 +7,10 @@
 @desc    :
 '''
 
+LOG_SUCC = 1  # 登录成功状态
+LOG_FAILED = 2  # 登录失败状态，用户名或者密码错误
+LOG_NEEDPROXIES = 3  # 登录失败过多，需要等待15min或者设置代理，实测只要10min不到
+
 # 最大线程数
 CONCURRENT_THREADS = 20
 
@@ -27,24 +31,12 @@ YDM_USERNAME = ''
 # 云打码密码
 YDM_PASSWORD = ''
 
-# Mongodb配置
-MONGODB_URI = 'localhost'
-MONGODB_DB = 'stuhome'
-MONGODB_PORT = 27017
-MONGODB_COLLECTION = 'users'
 
 # 刷新页面的延迟，单位s
 REFRESH_DELAY = 60
-
-# 当前登录用户的用户名
-CURRENT_USERNAME = ''
 
 # 代理ip
 PROXIES = {
     'http': '',
     'https': ''
 }
-
-# 回复内容
-REPLYS = ['水水', '看看', '试试', '666', '水汽来', '福德紧', '不服', '再来', '紫砂', '看看呢', '还有人战吗', '水特么的'
-          , '拿点水不容易', '我爱河畔']

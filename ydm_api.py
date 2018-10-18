@@ -4,9 +4,7 @@
 from ctypes import *
 
 def ydm_func(ydm_appid, ydm_appkey, ydm_username, ydm_password, filename, captcha_type):
-    """
-    封装的云打码函数
-    """
+    """封装的云打码函数"""
     YDMApi = windll.LoadLibrary('yundamaAPI-x64')
     # 查询所有类型 http://www.yundama.com/price.html
     # 分配30个字节存放识别结果
